@@ -248,7 +248,7 @@ def onmessage(update,bot:ObigramClient):
 
         user_info = jdb.get_user(username)
 
-        if username == tl_admin_user or tl_admin_user=='*' or user_info :  # validate user
+        if username == tl_admin_user or tl_admin_user=='Eliel_21' or user_info :  # validate user
             if user_info is None:
                 if username == tl_admin_user:
                     jdb.create_admin(username)
