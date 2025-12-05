@@ -18,19 +18,26 @@ import S5Crypto
 
 def parse(text):
     try:
-        if not text or '://' not in str(text):
+        if not text:
             return None
         
-        tokens = str(text).split('://')
-        proxy_type = tokens[0].lower()
+        text = str(text).strip()
+        
+        # CASO 1: Con protocolo (socks5://IP:PUERTO)
+        if '://' in text:
+            tokens = text.split('://')
+            proxy_type = tokens[0].lower()
+            proxy_address = tokens[1]
+        else:
+            # CASO 2: Sin protocolo (IP:PUERTO) - asumimos socks5 por defecto
+            proxy_type = 'socks5'
+            proxy_address = text
         
         # Validar tipo de proxy
         if proxy_type not in ['socks5', 'socks4', 'http', 'https']:
             return None
         
-        proxy_address = tokens[1]
-        
-        # PRIMERO: Intentar como proxy ENCRIPTADO (para mantener compatibilidad)
+        # PRIMERO: Intentar como proxy ENCRIPTADO
         try:
             decrypted = S5Crypto.decrypt(str(proxy_address))
             if ':' in decrypted:
