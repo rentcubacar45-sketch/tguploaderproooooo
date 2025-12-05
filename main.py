@@ -559,7 +559,7 @@ def main():
     # CONFIGURACIÓN MANUAL DEL TOKEN DEL BOT
     # Reemplaza 'TU_TOKEN_AQUI' con el token real que obtienes de @BotFather
     # Formato: '1234567890:AAFghijklmnopqrstuvwxyz123456789'
-    bot_token = '8467159687:AAFf4Hl_gF6NYxVHK-WVmhxtidGT4v-LaUE'
+    bot_token = '8483127134:AAEHoM1qo8bwzY5MCkLlxGoHEN3H0Y6kkPM'
 
     bot = ObigramClient(bot_token)
     bot.onMessage(onmessage)
