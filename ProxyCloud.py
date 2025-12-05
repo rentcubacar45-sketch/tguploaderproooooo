@@ -18,74 +18,57 @@ import S5Crypto
 
 def parse(text):
     try:
-        if not text:
+        if not text or '://' not in str(text):
             return None
         
-        text = str(text).strip()
-        
-        # Verificar formato básico
-        if '://' not in text:
-            return None
-        
-        # Separar tipo y dirección
-        tokens = text.split('://')
+        tokens = str(text).split('://')
         proxy_type = tokens[0].lower()
         
-        # Tipos válidos de proxy
-        valid_types = ['socks5', 'socks4', 'http', 'https']
-        if proxy_type not in valid_types:
+        # Validar tipo de proxy
+        if proxy_type not in ['socks5', 'socks4', 'http', 'https']:
             return None
         
         proxy_address = tokens[1]
         
-        # INTENTAR PRIMERO COMO PROXY NORMAL (NO ENCRIPTADO)
-        try:
-            # Manejar diferentes formatos:
-            # 1. IPv6: [2001:db8::1]:8080
-            # 2. IPv4/hostname: 1.2.3.4:8080 o ejemplo.com:8080
-            
-            if ']:' in proxy_address:  # IPv6 con corchetes
-                ip_end = proxy_address.rfind(']:')
-                ip = proxy_address[:ip_end+1]
-                port_str = proxy_address[ip_end+2:]
-            elif ':' in proxy_address:  # IPv4 o hostname
-                parts = proxy_address.rsplit(':', 1)
-                ip = parts[0]
-                port_str = parts[1]
-            else:
-                raise ValueError("Formato inválido")
-            
-            port = int(port_str)
-            if 1 <= port <= 65535:
-                return ProxyCloud(ip, port, proxy_type)
-                
-        except (ValueError, IndexError):
-            # Si falla como proxy normal, continuar...
-            pass
-        
-        # INTENTAR COMO PROXY ENCRIPTADO
+        # PRIMERO: Intentar como proxy ENCRIPTADO (para mantener compatibilidad)
         try:
             decrypted = S5Crypto.decrypt(str(proxy_address))
-            
             if ':' in decrypted:
                 proxy_tokens = decrypted.split(':')
+                ip = proxy_tokens[0]
                 
-                # Manejar IPv6 en formato encriptado
+                # Manejar IPv6
                 if len(proxy_tokens) > 2:
                     ip = ':'.join(proxy_tokens[:-1])
                     port_str = proxy_tokens[-1]
                 else:
-                    ip = proxy_tokens[0]
                     port_str = proxy_tokens[1]
                 
                 port = int(port_str)
-                if 1 <= port <= 65535:
-                    return ProxyCloud(ip, port, proxy_type)
-                    
+                return ProxyCloud(ip, port, proxy_type)
         except:
+            # Si falla la desencriptación, continuar...
             pass
+        
+        # SEGUNDO: Intentar como proxy NORMAL
+        try:
+            # Manejar formato IPv6: [2001:db8::1]:8080
+            if ']:' in proxy_address:
+                ip_end = proxy_address.rfind(']:')
+                ip = proxy_address[:ip_end+1]
+                port_str = proxy_address[ip_end+2:]
+            elif ':' in proxy_address:
+                parts = proxy_address.rsplit(':', 1)
+                ip = parts[0]
+                port_str = parts[1]
+            else:
+                return None
             
-    except:
-        pass
-    
-    return None
+            port = int(port_str)
+            return ProxyCloud(ip, port, proxy_type)
+            
+        except (ValueError, IndexError):
+            return None
+            
+    except Exception:
+        return None
