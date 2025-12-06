@@ -194,29 +194,37 @@ class MoodleClient(object):
         """
         Crea un nuevo evento en el calendario con el nombre del archivo y enlace
         Args:
-            filedata: Diccionario con 'file' (nombre) y 'url' (enlace)
+            filedata: Diccionario con 'file' (nombre), 'url' (enlace), 
+                     y opcionalmente 'custom_description' (descripción personalizada)
         """
         try:
+            from datetime import datetime
+            import urllib.parse
+            
             # Usar datos reales del archivo
             file_name = filedata['file']
             file_url = filedata['url']
             now = datetime.now()
             
-            # Crear descripción con enlace REAL - formato más completo
-            description = f'<p dir="ltr" style="text-align: left;">'
-            description += f'<strong>📄 Archivo:</strong> {file_name}<br>'
-            description += f'<strong>🔗 Enlace:</strong> <a href="{file_url}">Descargar archivo</a><br>'
-            description += f'<strong>📅 Subido:</strong> {now.strftime("%d/%m/%Y %H:%M")}<br>'
-            description += f'</p>'
+            # Usar descripción personalizada si está disponible
+            if 'custom_description' in filedata:
+                description = filedata['custom_description']
+            else:
+                # Crear descripción estándar
+                description = f'<p dir="ltr" style="text-align: left;">'
+                description += f'<strong>📄 Archivo:</strong> {file_name}<br>'
+                description += f'<strong>🔗 Enlace:</strong> <a href="{file_url}">Descargar archivo</a><br>'
+                description += f'<strong>📅 Subido:</strong> {now.strftime("%d/%m/%Y %H:%M")}<br>'
+                description += f'</p>'
             
             # Codificar para URL
             description_encoded = urllib.parse.quote(description)
             name_encoded = urllib.parse.quote(file_name)
             
-            # Usar fecha ACTUAL, no fija
+            # Usar fecha ACTUAL
             eventposturl = f'{self.path}lib/ajax/service.php?sesskey='+self.sesskey+'&info=core_calendar_submit_create_update_form'
             
-            # Preparar formdata con más detalles
+            # Preparar formdata
             formdata = f"id=0&userid={self.userid}&modulename=&instance=0&visible=1&eventtype=user"
             formdata += f"&sesskey={self.sesskey}"
             formdata += f"&_qf__core_calendar_local_event_forms_create=1&mform_showmore_id_general=1"
