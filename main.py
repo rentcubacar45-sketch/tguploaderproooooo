@@ -8,10 +8,6 @@ import os
 import infos
 import xdlink
 import mediafire
-# Comentamos las importaciones de mega que no existen
-# from megacli.mega import Mega
-# import megacli.megafolder as megaf
-# import megacli.mega
 import datetime
 import time
 import youtube
@@ -22,6 +18,7 @@ from ProxyCloud import ProxyCloud
 import ProxyCloud
 import socket
 import S5Crypto
+
 
 def downloadFile(downloader, filename, currentBits, totalBits, speed, time, args):
     try:
@@ -104,28 +101,7 @@ def processUploadFiles(filename, filesize, files, update, bot, message, thread=N
                           iter += 1
                           if iter >= 10:
                               break
-                    
                     os.unlink(f)
-                    
-                    # ✅ NUEVO: Crear evento en calendario AUTOMÁTICAMENTE después de subir
-                    if resp and 'url' in resp:
-                        # Obtener nombre del archivo
-                        file_name = os.path.basename(f)
-                        file_url = resp['url']
-                        
-                        # Crear evento en calendario (para todos los tipos de subida)
-                        event_result = client.create_event_from_url(file_name, file_url)
-                        
-                        if event_result:
-                            # Agregar información del evento a la respuesta
-                            resp['event_created'] = True
-                            resp['event_id'] = event_result.get('event', {}).get('id', '')
-                            resp['event_name'] = event_result.get('event', {}).get('name', file_name)
-                            print(f"🎉 Evento de calendario creado para: {file_name}")
-                        else:
-                            resp['event_created'] = False
-                            print(f"⚠️ No se pudo crear evento para: {file_name}")
-                
                 if user_info['uploadtype'] == 'evidence':
                     try:
                         client.saveEvidence(evidence)
@@ -209,29 +185,19 @@ def processFile(update, bot, message, file, thread=None, jdb=None):
                for draft in client:
                    files.append({'name': draft['file'], 'directurl': draft['url']})
                    
-                   # ✅ NUEVO: Mostrar información del evento si se creó
+                   # 🔥 NUEVO: Mostrar información del evento si se creó
                    if 'event_created' in draft and draft['event_created']:
-                       print(f"📅 Evento creado en calendario: {draft.get('event_name', 'N/A')}")
+                       event_info = f"\n📅 **Evento creado en calendario**"
+                       if draft.get('event_id'):
+                           event_info += f" (ID: {draft['event_id']})"
+                       bot.sendMessage(message.chat.id, event_info)
         else:
             for data in client:
                 files.append({'name': data['name'], 'directurl': data['url']})
         bot.deleteMessage(message.chat.id, message.message_id)
         finishInfo = infos.createFinishUploading(file, file_size, max_file_size, file_upload_count, file_upload_count, findex)
         filesInfo = infos.createFileMsg(file, files)
-        
-        # ✅ NUEVO: Agregar información de eventos creados al mensaje final
-        event_count = 0
-        if isinstance(client, list):
-            for item in client:
-                if isinstance(item, dict) and item.get('event_created'):
-                    event_count += 1
-        
-        if event_count > 0:
-            events_info = f"\n\n📅 **Eventos de calendario creados:** {event_count}"
-            bot.sendMessage(message.chat.id, finishInfo + events_info + '\n' + filesInfo, parse_mode='html')
-        else:
-            bot.sendMessage(message.chat.id, finishInfo + '\n' + filesInfo, parse_mode='html')
-            
+        bot.sendMessage(message.chat.id, finishInfo + '\n' + filesInfo, parse_mode='html')
         if len(files) > 0:
             txtname = str(file).split('/')[-1].split('.')[0] + '.txt'
             sendTxt(txtname, files, update, bot)
@@ -244,27 +210,7 @@ def ddl(update, bot, message, url, file_name='', thread=None, jdb=None):
         if file:
             processFile(update, bot, message, file, jdb=jdb)
         else:
-            megadl(update, bot, message, url, file_name, thread, jdb=jdb)
-
-
-def megadl(update, bot, message, megaurl, file_name='', thread=None, jdb=None):
-    megadl = Mega({'verbose': True})
-    megadl.login()
-    try:
-        info = megadl.get_public_url_info(megaurl)
-        file_name = info['name']
-        megadl.download_url(megaurl, dest_path=None, dest_filename=file_name, progressfunc=downloadFile, args=(bot, message, thread))
-        if not megadl.stoping:
-            processFile(update, bot, message, file_name, thread=thread)
-    except:
-        files = megaf.get_files_from_folder(megaurl)
-        for f in files:
-            file_name = f['name']
-            megadl._download_file(f['handle'], f['key'], dest_path=None, dest_filename=file_name, is_public=False, progressfunc=downloadFile, args=(bot, message, thread), f_data=f['data'])
-            if not megadl.stoping:
-                processFile(update, bot, message, file_name, thread=thread)
-        pass
-    pass
+            bot.editMessageText(message, '❌Error en la descarga❌')
 
 
 def sendTxt(name, files, update, bot):
@@ -287,7 +233,6 @@ def onmessage(update, bot: ObigramClient):
         username = update.message.sender.username
         
         # CONFIGURACIÓN MANUAL DEL ADMINISTRADOR
-        # Cambia 'Eliel_21' por tu nombre de usuario de Telegram (sin el @)
         tl_admin_user = 'Eliel_21'
 
         jdb = JsonDatabase('database')
@@ -296,7 +241,7 @@ def onmessage(update, bot: ObigramClient):
 
         user_info = jdb.get_user(username)
 
-        if username == tl_admin_user or tl_admin_user == 'Eliel_21' or user_info:  # validate user
+        if username == tl_admin_user or tl_admin_user == 'Eliel_21' or user_info:
             if user_info is None:
                 if username == tl_admin_user:
                     jdb.create_admin(username)
