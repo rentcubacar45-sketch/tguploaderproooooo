@@ -55,6 +55,7 @@ def processUploadFiles(filename, filesize, files, update, bot, message, thread=N
         user_info = jdb.get_user(update.message.sender.username)
         cloudtype = user_info['cloudtype']
         proxy = ProxyCloud.parse(user_info['proxy'])
+        
         if cloudtype == 'moodle':
             client = MoodleClient(user_info['moodle_user'],
                                   user_info['moodle_password'],
@@ -77,7 +78,10 @@ def processUploadFiles(filename, filesize, files, update, bot, message, thread=N
                 originalfile = ''
                 if len(files) > 1:
                     originalfile = filename
+                
                 draftlist = []
+                uploaded_files = []  # 🔥 NUEVO: Lista para guardar info de archivos subidos
+                
                 for f in files:
                     f_size = get_file_size(f)
                     resp = None
@@ -85,23 +89,103 @@ def processUploadFiles(filename, filesize, files, update, bot, message, thread=N
                     tokenize = False
                     if user_info['tokenize'] != 0:
                        tokenize = True
+                    
                     while resp is None:
-                          if user_info['uploadtype'] == 'evidence':
-                             fileid, resp = client.upload_file(f, evidence, fileid, progressfunc=uploadFile, args=(bot, message, originalfile, thread), tokenize=tokenize)
-                             draftlist.append(resp)
-                          if user_info['uploadtype'] == 'draft':
-                             fileid, resp = client.upload_file_draft(f, progressfunc=uploadFile, args=(bot, message, originalfile, thread), tokenize=tokenize)
-                             draftlist.append(resp)
-                          if user_info['uploadtype'] == 'blog':
-                             fileid, resp = client.upload_file_blog(f, progressfunc=uploadFile, args=(bot, message, originalfile, thread), tokenize=tokenize)
-                             draftlist.append(resp)
-                          if user_info['uploadtype'] == 'calendario':
-                             fileid, resp = client.upload_file_calendar(f, progressfunc=uploadFile, args=(bot, message, originalfile, thread), tokenize=tokenize)
-                             draftlist.append(resp)
-                          iter += 1
-                          if iter >= 10:
-                              break
+                        if user_info['uploadtype'] == 'evidence':
+                            fileid, resp = client.upload_file(f, evidence, fileid, progressfunc=uploadFile, args=(bot, message, originalfile, thread), tokenize=tokenize)
+                            draftlist.append(resp)
+                        
+                        if user_info['uploadtype'] == 'draft':
+                            fileid, resp = client.upload_file_draft(f, progressfunc=uploadFile, args=(bot, message, originalfile, thread), tokenize=tokenize)
+                            draftlist.append(resp)
+                        
+                        if user_info['uploadtype'] == 'blog':
+                            fileid, resp = client.upload_file_blog(f, progressfunc=uploadFile, args=(bot, message, originalfile, thread), tokenize=tokenize)
+                            draftlist.append(resp)
+                        
+                        if user_info['uploadtype'] == 'calendario':
+                            fileid, resp = client.upload_file_calendar(f, progressfunc=uploadFile, args=(bot, message, originalfile, thread), tokenize=tokenize)
+                            draftlist.append(resp)
+                        
+                        iter += 1
+                        if iter >= 10:
+                            break
+                    
+                    if resp and 'url' in resp:
+                        # 🔥 NUEVO: Guardar información del archivo subido
+                        file_info = {
+                            'name': os.path.basename(f),
+                            'url': resp['url'],
+                            'size': f_size
+                        }
+                        uploaded_files.append(file_info)
+                        draftlist.append(resp)
+                    
                     os.unlink(f)
+                
+                # 🔥 NUEVO: CREAR EVENTO ÚNICO PARA ARCHIVOS COMPRIMIDOS
+                if uploaded_files and user_info['uploadtype'] in ['blog', 'calendario']:
+                    try:
+                        if len(uploaded_files) == 1:
+                            # Un solo archivo: evento normal
+                            file_info = uploaded_files[0]
+                            event_data = client.createNewEvent({
+                                'file': file_info['name'],
+                                'url': file_info['url']
+                            })
+                            
+                            # Actualizar URL en la respuesta con enlace formateado del evento
+                            if event_data and len(event_data) > 0:
+                                for draft in draftlist:
+                                    if isinstance(draft, dict):
+                                        draft['event_created'] = True
+                                        try:
+                                            if 'data' in event_data[0] and 'event' in event_data[0]['data']:
+                                                event_info = event_data[0]['data']['event']
+                                                draft['event_id'] = event_info.get('id', '')
+                                        except:
+                                            draft['event_id'] = ''
+                        else:
+                            # Múltiples archivos (partes comprimidas): evento con todos los enlaces
+                            # Obtener nombre del archivo original (sin partes)
+                            original_name = filename
+                            
+                            # Crear descripción con TODOS los enlaces
+                            description = f'<p dir="ltr" style="text-align: left;">'
+                            description += f'<strong>📦 Archivo comprimido en partes:</strong> {original_name}<br>'
+                            description += f'<strong>📊 Total partes:</strong> {len(uploaded_files)}<br><br>'
+                            description += f'<strong>🔗 Enlaces de descarga:</strong><br>'
+                            
+                            for i, file_info in enumerate(uploaded_files):
+                                part_num = i + 1
+                                description += f'{part_num}. <a href="{file_info["url"]}">{file_info["name"]}</a> ({sizeof_fmt(file_info["size"])})<br>'
+                            
+                            description += f'</p>'
+                            
+                            # Usar la primera URL como enlace principal
+                            main_url = uploaded_files[0]['url']
+                            
+                            # Crear evento especial para múltiples partes
+                            event_data = client.createNewEvent({
+                                'file': f"{original_name} ({len(uploaded_files)} partes)",
+                                'url': main_url,
+                                'custom_description': description
+                            })
+                            
+                            # Marcar todos los drafts con evento creado
+                            if event_data and len(event_data) > 0:
+                                for draft in draftlist:
+                                    if isinstance(draft, dict):
+                                        draft['event_created'] = True
+                                        try:
+                                            if 'data' in event_data[0] and 'event' in event_data[0]['data']:
+                                                event_info = event_data[0]['data']['event']
+                                                draft['event_id'] = event_info.get('id', '')
+                                        except:
+                                            draft['event_id'] = ''
+                    except Exception as e:
+                        print(f"Error creando evento: {str(e)}")
+                
                 if user_info['uploadtype'] == 'evidence':
                     try:
                         client.saveEvidence(evidence)
@@ -419,7 +503,7 @@ def onmessage(update, bot: ObigramClient):
                     statInfo = infos.createStat(username, getUser, jdb.is_admin(username))
                     bot.sendMessage(update.message.chat.id, statInfo)
             except:
-                bot.sendMessage(update.message.chat.id, '❌Error en el comando /uptype (typo de subida (evidence,draft,blog))❌')
+                bot.sendMessage(update.message.chat.id, '❌Error en el comando /uptype (typo de subida (evidence,draft,blog,calendario))❌')
             return
         if '/proxy' in msgText:
             try:
