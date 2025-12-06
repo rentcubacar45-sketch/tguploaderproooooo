@@ -8,9 +8,10 @@ import os
 import infos
 import xdlink
 import mediafire
-from megacli.mega import Mega
-import megacli.megafolder as megaf
-import megacli.mega
+# Comentamos las importaciones de mega que no existen
+# from megacli.mega import Mega
+# import megacli.megafolder as megaf
+# import megacli.mega
 import datetime
 import time
 import youtube
@@ -21,7 +22,6 @@ from ProxyCloud import ProxyCloud
 import ProxyCloud
 import socket
 import S5Crypto
-
 
 def downloadFile(downloader, filename, currentBits, totalBits, speed, time, args):
     try:
