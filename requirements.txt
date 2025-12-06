@@ -16,5 +16,5 @@ tgcrypto
 aiohttp
 yarl
 mega.py
-megacli
+megacli.mega
 
