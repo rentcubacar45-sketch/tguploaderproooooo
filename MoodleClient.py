@@ -190,72 +190,80 @@ class MoodleClient(object):
         resp = self.session.post(post_url, data=payload, proxies=self.proxy, headers=self.baseheaders)
         return resp
 
-    def createNewEvent(self, filedata):
+    def create_event_from_url(self, file_name, file_url):
         """
-        Crea un nuevo evento en el calendario con el nombre del archivo y enlace
+        Crea un evento en el calendario a partir de un archivo ya subido
+        
         Args:
-            filedata: Diccionario con 'file' (nombre), 'url' (enlace), 
-                     y opcionalmente 'custom_description' (descripción personalizada)
+            file_name: Nombre del archivo
+            file_url: URL del archivo ya subido
+        
+        Returns:
+            Diccionario con información del evento creado
         """
         try:
-            from datetime import datetime
-            import urllib.parse
-            
-            # Usar datos reales del archivo
-            file_name = filedata['file']
-            file_url = filedata['url']
+            # Obtener fecha y hora actual
             now = datetime.now()
             
-            # Usar descripción personalizada si está disponible
-            if 'custom_description' in filedata:
-                description = filedata['custom_description']
-            else:
-                # Crear descripción estándar
-                description = f'<p dir="ltr" style="text-align: left;">'
-                description += f'<strong>📄 Archivo:</strong> {file_name}<br>'
-                description += f'<strong>🔗 Enlace:</strong> <a href="{file_url}">Descargar archivo</a><br>'
-                description += f'<strong>📅 Subido:</strong> {now.strftime("%d/%m/%Y %H:%M")}<br>'
-                description += f'</p>'
+            # Crear descripción con el enlace al archivo
+            description = f'<p dir="ltr" style="text-align: left;">'
+            description += f'<strong>📄 Archivo:</strong> {file_name}<br>'
+            description += f'<strong>🔗 Enlace:</strong> <a href="{file_url}" target="_blank">Abrir archivo</a><br>'
+            description += f'<strong>📅 Subido:</strong> {now.strftime("%d/%m/%Y %H:%M")}<br>'
+            description += f'</p>'
             
             # Codificar para URL
             description_encoded = urllib.parse.quote(description)
             name_encoded = urllib.parse.quote(file_name)
             
-            # Usar fecha ACTUAL
-            eventposturl = f'{self.path}lib/ajax/service.php?sesskey='+self.sesskey+'&info=core_calendar_submit_create_update_form'
+            # Preparar datos del formulario
+            form_data = f"id=0&userid={self.userid}&modulename=&instance=0&visible=1&eventtype=user"
+            form_data += f"&sesskey={self.sesskey}"
+            form_data += f"&_qf__core_calendar_local_event_forms_create=1&mform_showmore_id_general=1"
+            form_data += f"&name={name_encoded}"
+            form_data += f"&timestart%5Bday%5D={now.day}&timestart%5Bmonth%5D={now.month}"
+            form_data += f"&timestart%5Byear%5D={now.year}"
+            form_data += f"&timestart%5Bhour%5D={now.hour}&timestart%5Bminute%5D={now.minute}"
+            form_data += f"&description%5Btext%5D={description_encoded}"
+            form_data += f"&description%5Bformat%5D=1"
+            form_data += f"&description%5Bitemid%5D={int(time.time())}"
+            form_data += f"&location=&duration=0"
             
-            # Preparar formdata
-            formdata = f"id=0&userid={self.userid}&modulename=&instance=0&visible=1&eventtype=user"
-            formdata += f"&sesskey={self.sesskey}"
-            formdata += f"&_qf__core_calendar_local_event_forms_create=1&mform_showmore_id_general=1"
-            formdata += f"&name={name_encoded}"
-            formdata += f"&timestart%5Bday%5D={now.day}&timestart%5Bmonth%5D={now.month}"
-            formdata += f"&timestart%5Byear%5D={now.year}"
-            formdata += f"&timestart%5Bhour%5D={now.hour}&timestart%5Bminute%5D={now.minute}"
-            formdata += f"&description%5Btext%5D={description_encoded}&description%5Bformat%5D=1"
-            formdata += f"&description%5Bitemid%5D={int(time.time())}"
-            formdata += f"&location=&duration=0"
+            # URL para crear evento
+            event_url = f'{self.path}lib/ajax/service.php?sesskey={self.sesskey}&info=core_calendar_submit_create_update_form'
             
+            # JSON para la petición AJAX
             jsondata = [{
                 "index": 0,
                 "methodname": "core_calendar_submit_create_update_form",
-                "args": {"formdata": formdata}
+                "args": {"formdata": form_data}
             }]
             
+            # Headers
             headers = {
-                'Content-type': 'application/json', 
+                'Content-type': 'application/json',
                 'Accept': 'application/json, text/javascript, */*; q=0.01',
                 **self.baseheaders
             }
             
-            resp = self.session.post(eventposturl, json=jsondata, headers=headers, proxies=self.proxy)
+            # Enviar petición
+            resp = self.session.post(event_url, json=jsondata, headers=headers, proxies=self.proxy)
             
+            # Procesar respuesta
             if resp.status_code == 200:
-                return resp.json()
+                data = resp.json()
+                if data and len(data) > 0:
+                    if 'error' in data[0] and data[0]['error']:
+                        print(f"Error creando evento: {data[0]['error']}")
+                        return None
+                    elif 'data' in data[0] and data[0]['data']:
+                        print(f"✅ Evento creado exitosamente: {file_name}")
+                        return data[0]['data']
+            
             return None
             
         except Exception as e:
-            print(f"Error creando evento: {str(e)}")
+            print(f"❌ Error creando evento: {str(e)}")
             return None
 
     def saveEvidence(self, evidence):
@@ -441,70 +449,14 @@ class MoodleClient(object):
             data = self.parsejson(resp2.text)
             data['url'] = str(data['url']).replace('\\', '')
             data['normalurl'] = data['url']
-            
-            # 🔥 NUEVO: CREAR EVENTO EN CALENDARIO DESPUÉS DE SUBIR
-            # Obtener nombre del archivo
-            file_name = os.path.basename(file)
-            file_url = data['normalurl']
-            
-            # Crear evento en calendario
-            event_data = self.createNewEvent({
-                'file': file_name,
-                'url': file_url
-            })
-            
-            # Agregar información del evento creado a los datos que retorna
-            if event_data and len(event_data) > 0:
-                data['event_created'] = True
-                
-                # Intentar obtener el ID del evento
-                try:
-                    if 'data' in event_data[0] and 'event' in event_data[0]['data']:
-                        event_info = event_data[0]['data']['event']
-                        data['event_id'] = event_info.get('id', '')
-                        
-                        # 🔥 NUEVO: EXTRAER ENLACE FORMATEADO DEL EVENTO
-                        # Obtener descripción HTML del evento
-                        event_html = event_info.get('description', '')
-                        if event_html:
-                            soup_desc = BeautifulSoup(event_html, 'html.parser')
-                            link_tag = soup_desc.find('a')
-                            if link_tag and link_tag.get('href'):
-                                event_file_url = link_tag['href']
-                                
-                                # Formatear como enlace webservice con token
-                                if self.userdata and 'token' in self.userdata:
-                                    # Convertir pluginfile.php a webservice/pluginfile.php
-                                    if 'pluginfile.php' in event_file_url:
-                                        # Obtener partes de la URL
-                                        parts = event_file_url.split('/')
-                                        if len(parts) >= 5:
-                                            context_id = parts[4]
-                                            # Construir nueva URL con token
-                                            new_url = f"{self.path}webservice/pluginfile.php/{context_id}/calendar/event_description/{data['event_id']}/{file_name}?token={self.userdata['token']}"
-                                            # 🔥 REEMPLAZAR LA URL ORIGINAL CON LA URL FORMATEADA DEL EVENTO
-                                            data['url'] = new_url
-                                            data['event_url'] = new_url
-                                            print(f"✅ Enlace de evento formateado: {new_url}")
-                except Exception as e:
-                    print(f"Error procesando enlace del evento: {str(e)}")
-                    data['event_id'] = ''
-            else:
-                data['event_created'] = False
-                data['event_id'] = ''
-            
-            # Tokenizar si es necesario (PERO YA TENEMOS EL ENLACE DEL EVENTO)
             if self.userdata:
                 if 'token' in self.userdata and not tokenize:
-                    # Ya tenemos el enlace formateado, no necesitamos tokenizar de nuevo
-                    pass
+                    data['url'] = str(data['url']).replace('pluginfile.php/', 'webservice/pluginfile.php/') + '?token=' + \
+                                  self.userdata['token']
                 if tokenize:
-                    # Si se requiere tokenizar, tokenizar el enlace del evento
                     data['url'] = self.host_tokenize + S5Crypto.encrypt(data['url']) + '/' + self.userdata['s5token']
-                    
             return itempostid, data
-        except Exception as e:
-            print(f"Error en upload_file_blog: {str(e)}")
+        except:
             return None, None
 
     def upload_file_perfil(self, file, progressfunc=None, args=(), tokenize=False):
@@ -636,8 +588,12 @@ class MoodleClient(object):
         return None, data
 
     def upload_file_calendar(self, file, progressfunc=None, args=(), tokenize=False):
-        # Usar el mismo método que blog para crear evento automático
-        return self.upload_file_blog(file, progressfunc, args, tokenize)
+        """
+        Sube un archivo - el evento se creará automáticamente después
+        """
+        # Este método ahora es idéntico a upload_file_draft o upload_file_blog
+        # porque el evento se crea en processUploadFiles
+        return self.upload_file_draft(file, progressfunc, args, tokenize)
 
     def parsejson(self, json_str):
         data = {}
